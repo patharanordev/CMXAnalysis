@@ -35,16 +35,17 @@ internal data class Result(
 class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnalysis.Analyzer {
 
     private val TAG = "CMXAnalyzer"
-
-    // To support slow inference in the large screen/resolution
-    // Ex. screen size 8XX x 1,9XX
-    private val RESIZING_BITMAP_COMPUTATION = 3
+    private val DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE = 640
 
     private var ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
     private lateinit var ortSession: OrtSession
     private lateinit var classes:List<String>
     private var overlay: ImageView? = null
     private var isDebug = false
+
+    // To support slow inference in the large screen/resolution
+    // Ex. screen size 8XX x 1,9XX
+    private var RESIZING_BITMAP_COMPUTATION = 1
 
     fun init(modelBytes: ByteArray, classes: List<String>, overlay: ImageView?) {
         this.classes = classes
@@ -66,9 +67,10 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
 
         if (overlay != null) {
             this.overlay = overlay
+            this.autoScaleImageIO(this.overlay)
         }
 
-        Log.d(TAG, "Initial object detection")
+        Log.d(TAG, "Initialized object detection")
     }
 
     @ExperimentalGetImage
@@ -117,6 +119,16 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
                         updateUI(result)
                     }
                 }
+            }
+        }
+    }
+
+    private fun autoScaleImageIO(overlay: ImageView?) {
+        if (overlay != null) {
+            if (overlay.width > DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE || overlay.height > DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE) {
+                val maxResolution = Math.max(overlay.width, overlay.height)
+                RESIZING_BITMAP_COMPUTATION = maxResolution/DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE
+                Log.d(TAG, "Auto-scale image IO with ratio $RESIZING_BITMAP_COMPUTATION")
             }
         }
     }
