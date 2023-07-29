@@ -12,28 +12,34 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.os.SystemClock
 import android.util.Log
 import android.widget.ImageView
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import com.google.common.primitives.Ints
 import com.patharanor.cmxanalysis.utils.BitmapUtils
 import java.nio.ByteBuffer
 import java.util.Collections
-import java.util.Random
+import kotlin.math.roundToInt
 
 
 typealias ObjectDetectionListener = (bitmap: Bitmap) -> Unit
 
 internal data class Result(
     var outputBitmap: Bitmap,
-    var outputBox: Array<FloatArray>
+    var outputBox: Array<FloatArray>,
+    var inferenceTime: Long,
 ) {}
 
 class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnalysis.Analyzer {
 
     private val TAG = "CMXAnalyzer"
+
+    // To support slow inference in the large screen/resolution
+    // Ex. screen size 8XX x 1,9XX
+    private val RESIZING_BITMAP_COMPUTATION = 3
+
     private var ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
     private lateinit var ortSession: OrtSession
     private lateinit var classes:List<String>
@@ -46,7 +52,16 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
         // Note: These are used to decode the input image into the format the original model requires,
         // and to encode the model output into png format
         val sessionOptions: OrtSession.SessionOptions = OrtSession.SessionOptions()
+        var providerOptions = mutableMapOf<String, String>()
+
         sessionOptions.registerCustomOpLibrary(OrtxPackage.getLibraryPath())
+        sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.EXTENDED_OPT)
+        sessionOptions.addConfigEntry("kOrtSessionOptionsConfigAllowIntraOpSpinning", "0")
+
+        providerOptions["intra_op_num_threads"] = "1"
+        sessionOptions.addXnnpack(providerOptions)
+        sessionOptions.setIntraOpNumThreads(1)
+
         ortSession = ortEnv.createSession(modelBytes, sessionOptions)
 
         if (overlay != null) {
@@ -60,11 +75,17 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
     private fun detect(image: ImageProxy, ortEnv: OrtEnvironment, ortSession: OrtSession) {
         // Step 1: convert image into byte array (raw image bytes)
         //val rawImageBytes = inputStream.readBytes()
-        val bitmap: Bitmap? = BitmapUtils.getBitmap(image)
+        val startInference = SystemClock.uptimeMillis()
+        var bitmap: Bitmap? = BitmapUtils.getBitmap(image)
+
+        if (bitmap != null) {
+            bitmap = BitmapUtils.getResizedBitmap(bitmap, bitmap.width / RESIZING_BITMAP_COMPUTATION, bitmap.height / RESIZING_BITMAP_COMPUTATION)
+        }
+
         if (bitmap != null) {
             val bWidth = bitmap.width
             val bHeight = bitmap.height
-            Log.d(TAG, "width: $bWidth, height: $bHeight");
+            Log.d(TAG, "width: $bWidth, height: $bHeight")
             // Step 2: get the shape of the byte array and make ort tensor
             val bytes: ByteArray? = BitmapUtils.convertBitmapToByteArray(bitmap)
 
@@ -79,20 +100,21 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
                 )
                 inputTensor.use {
                     // Step 3: call ort inferenceSession run
-                    val output = ortSession.run(
+                    val output: OrtSession.Result = ortSession.run(
                         Collections.singletonMap("image", inputTensor),
                         setOf("image_out", "scaled_box_out_next")
                     )
 
                     // Step 4: output analysis
                     output.use {
-                        val rawOutput = (output?.get(0)?.value) as ByteArray
-                        val boxOutput = (output?.get(1)?.value) as Array<FloatArray>
+                        val rawOutput = (output.get(0)?.value) as ByteArray
+                        val boxOutput = (output.get(1)?.value) as Array<FloatArray>
                         val outputImageBitmap = byteArrayToBitmap(rawOutput)
+                        val finishInference = SystemClock.uptimeMillis() - startInference
 
                         // Step 5: set output result
-                        var result = Result(outputImageBitmap, boxOutput)
-                        updateUI(result, bitmap)
+                        val result = Result(outputImageBitmap, boxOutput, finishInference)
+                        updateUI(result)
                     }
                 }
             }
@@ -103,8 +125,10 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
         this.isDebug = isDebug
     }
 
-    private fun updateUI(result: Result, originalCameraImage: Bitmap?) {
+    private fun updateUI(result: Result) {
         val mutableBitmap: Bitmap
+
+        Log.d(TAG, "Inference time : ${result.inferenceTime}")
 
         if (isDebug) {
             mutableBitmap = result.outputBitmap.copy(Bitmap.Config.ARGB_8888, true)
@@ -122,9 +146,9 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
         textPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_OVER) // Text Overlapping Pattern
 
         canvas.drawBitmap(mutableBitmap, 0.0f, 0.0f, textPaint)
-        var boxit = result.outputBox.iterator()
-        var xScale: Float = 1.0f
-        var yScale: Float = 1.0f
+        val boxit = result.outputBox.iterator()
+        var xScale = 1.0f
+        var yScale = 1.0f
 
         if (overlay != null) {
             xScale = overlay!!.scaleX
@@ -132,38 +156,43 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
         }
 
         while(boxit.hasNext()) {
-            var box_info = boxit.next()
+            val boxInfo = boxit.next()
 
             // out => x0,y0,x1,y1,score,cls_id
-            var x = box_info[0]
-            var y = box_info[1]
-            var w = box_info[2]
-            var h = box_info[3]
-            var score = box_info[4]
-            var cls_id = box_info[5]
+            val x = boxInfo[0]
+            val y = boxInfo[1]
+            val w = boxInfo[2]
+            val h = boxInfo[3]
+            val score = boxInfo[4]
+            val classId = boxInfo[5]
 
-            var left = ((x - w/2))
-            var top = ((y - h/2))
-            var width = ((left+w) * xScale)
-            var height = ((top+h) * yScale)
+            val left = ((x - w/2))
+            val top = ((y - h/2))
+            val width = ((left+w) * xScale)
+            val height = ((top+h) * yScale)
 
-            canvas.drawText("%s:%.2f".format(classes[cls_id.toInt()], score),
+            canvas.drawText("%s:%.2f".format(classes[classId.toInt()], score),
                 x-w/2+8, y-h/2+32, textPaint)
 
             val boxPaint = Paint()
-            val pixel = result.outputBitmap.getPixel(Math.round(width/2), Math.round(height/2)) * cls_id.toInt() / 255
+            val pixel = result.outputBitmap.getPixel((width / 2).roundToInt(),
+                (height / 2).roundToInt()
+            ) * classId.toInt() / 255
 
             // border
             boxPaint.strokeWidth = 6f
             boxPaint.style = Paint.Style.STROKE
 
-            //boxPaint.setARGB(255, 255, 255 - pixel, 255 - pixel)
             boxPaint.setARGB(255, 255, pixel, 255 - pixel)
 
             canvas.drawRect(left, top, (width), (height), boxPaint)
         }
 
-        listener(mutableBitmap)
+        val bitmap: Bitmap? = BitmapUtils.getResizedBitmap(mutableBitmap, mutableBitmap.width * RESIZING_BITMAP_COMPUTATION, mutableBitmap.height * RESIZING_BITMAP_COMPUTATION)
+
+        if (bitmap != null) {
+            listener(bitmap)
+        }
     }
 
     private fun byteArrayToBitmap(data: ByteArray): Bitmap {
