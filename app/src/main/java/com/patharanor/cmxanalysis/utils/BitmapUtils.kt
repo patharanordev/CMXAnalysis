@@ -24,6 +24,8 @@ import java.nio.ByteBuffer
 /** Utils functions for bitmap conversions.  */
 object BitmapUtils {
     private const val TAG = "BitmapUtils"
+    private val IMAGE_MEAN = 128;
+    private val IMAGE_STD = 128.0f;
 
     /** Converts NV21 format byte buffer to bitmap.  */
     private fun getBitmap(data: ByteBuffer, metadata: FrameMetadata): Bitmap? {
@@ -262,5 +264,34 @@ object BitmapUtils {
                 }
             }
         }
+    }
+
+    // Density independent Pixels (DP)
+    fun convertPixelToDp(pixelInput: Int): Float {
+        var pixel: Float = 0f
+        val currentPixel = pixelInput.toString().toFloatOrNull()
+        if (currentPixel != null) {
+            pixel = currentPixel
+        }
+
+        return pixel
+    }
+
+    fun getResizedBitmap(bm: Bitmap, newWidth: Int, newHeight: Int): Bitmap? {
+        val width = bm.width
+        val height = bm.height
+        val scaleWidth = newWidth.toFloat() / width
+        val scaleHeight = newHeight.toFloat() / height
+        // CREATE A MATRIX FOR THE MANIPULATION
+        val matrix = Matrix()
+        // RESIZE THE BIT MAP
+        matrix.postScale(scaleWidth, scaleHeight)
+
+        // "RECREATE" THE NEW BITMAP
+        val resizedBitmap = Bitmap.createBitmap(
+            bm, 0, 0, width, height, matrix, false
+        )
+        bm.recycle()
+        return resizedBitmap
     }
 }

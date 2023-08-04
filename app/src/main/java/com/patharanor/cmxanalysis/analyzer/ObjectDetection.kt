@@ -138,7 +138,7 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
     }
 
     private fun updateUI(result: Result) {
-        val mutableBitmap: Bitmap
+        var mutableBitmap: Bitmap?
 
         Log.d(TAG, "Inference time : ${result.inferenceTime}")
 
@@ -154,7 +154,7 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
         val canvas = Canvas(mutableBitmap)
         val textPaint = Paint()
         textPaint.color = Color.WHITE // Text Color
-        textPaint.textSize = 28f // Text Size
+        textPaint.textSize = 18f // Text Size
         textPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_OVER) // Text Overlapping Pattern
 
         canvas.drawBitmap(mutableBitmap, 0.0f, 0.0f, textPaint)
@@ -192,18 +192,19 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
             ) * classId.toInt() / 255
 
             // border
-            boxPaint.strokeWidth = 6f
+            boxPaint.strokeWidth = 3f
             boxPaint.style = Paint.Style.STROKE
-
             boxPaint.setARGB(255, 255, pixel, 255 - pixel)
-
             canvas.drawRect(left, top, (width), (height), boxPaint)
         }
 
-        val bitmap: Bitmap? = BitmapUtils.getResizedBitmap(mutableBitmap, mutableBitmap.width * RESIZING_BITMAP_COMPUTATION, mutableBitmap.height * RESIZING_BITMAP_COMPUTATION)
+        mutableBitmap = BitmapUtils.getResizedBitmap(
+            mutableBitmap,
+            mutableBitmap.width * RESIZING_BITMAP_COMPUTATION,
+            mutableBitmap.height * RESIZING_BITMAP_COMPUTATION)
 
-        if (bitmap != null) {
-            listener(bitmap)
+        if (mutableBitmap != null) {
+            listener(mutableBitmap)
         }
     }
 
