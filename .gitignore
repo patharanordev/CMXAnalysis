@@ -15,3 +15,7 @@
 local.properties
 .idea
 .gradle
+prepostprocessor/*
+!prepostprocessor/test
+!prepostprocessor/requirements.txt
+!prepostprocessor/yolo_e2e.py
