@@ -1,0 +1,6 @@
+numpy==1.24
+onnx==1.14.0
+ultralytics
+onnxruntime
+protobuf==3.20.3
+seaborn
