@@ -43,6 +43,7 @@ data class BoundingBox(
     var top: Float = 0f,
     var width: Float = 0f,
     var height: Float = 0f,
+    var label: String = "",
 ) {}
 
 class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnalysis.Analyzer {
@@ -201,6 +202,7 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
                 bbox.top = ((bbox.y - bbox.h/2))
                 bbox.width = ((bbox.left+bbox.w) * xScale)
                 bbox.height = ((bbox.top+bbox.h) * yScale)
+                bbox.label = classes[bbox.classId.toInt()]
                 bboxes.add(bbox)
 
                 textPaint.color = Color.RED;

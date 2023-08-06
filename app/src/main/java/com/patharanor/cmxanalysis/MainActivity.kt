@@ -2,6 +2,8 @@ package com.patharanor.cmxanalysis
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -72,7 +74,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Set up the listeners for take photo buttons
-        viewBinding.imageCaptureButton.setOnClickListener { cameraCapture?.takePhoto(this.bboxes) }
+        viewBinding.imageCaptureButton.setOnClickListener {
+            viewBinding.viewFinder.bitmap?.let { it1 ->
+                cameraCapture?.recordTargetObject(it1, this.bboxes)
+            }
+        }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
