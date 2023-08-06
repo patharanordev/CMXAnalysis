@@ -24,12 +24,25 @@ import java.util.Collections
 import kotlin.math.roundToInt
 
 
-typealias ObjectDetectionListener = (bitmap: Bitmap) -> Unit
+typealias ObjectDetectionListener = (bitmap: Bitmap, bboxes: Array<BoundingBox>) -> Unit
 
 internal data class Result(
     var outputBitmap: Bitmap,
     var outputBox: Array<FloatArray>,
     var inferenceTime: Long,
+) {}
+
+data class BoundingBox(
+    var x: Float = 0f,
+    var y: Float = 0f,
+    var w: Float = 0f,
+    var h: Float = 0f,
+    var score: Float = 0f,
+    var classId: Float = 0f,
+    var left: Float = 0f,
+    var top: Float = 0f,
+    var width: Float = 0f,
+    var height: Float = 0f,
 ) {}
 
 class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnalysis.Analyzer {
@@ -131,6 +144,8 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
                 Log.d(TAG, "Auto-scale image IO with ratio $RESIZING_BITMAP_COMPUTATION")
             }
         }
+
+//        RESIZING_BITMAP_COMPUTATION = 1
     }
 
     fun setDebug(isDebug: Boolean) {
@@ -146,15 +161,14 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
             mutableBitmap = result.outputBitmap.copy(Bitmap.Config.ARGB_8888, true)
         } else {
             mutableBitmap = Bitmap.createBitmap(
-                result.outputBitmap.width,
-                result.outputBitmap.height, Bitmap.Config.ARGB_8888
+                result.outputBitmap.width * RESIZING_BITMAP_COMPUTATION,
+                result.outputBitmap.height * RESIZING_BITMAP_COMPUTATION, Bitmap.Config.ARGB_8888
             )
         }
 
         val canvas = Canvas(mutableBitmap)
         val textPaint = Paint()
-        textPaint.color = Color.WHITE // Text Color
-        textPaint.textSize = 18f // Text Size
+        textPaint.textSize = 12f * RESIZING_BITMAP_COMPUTATION // Text Size
         textPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_OVER) // Text Overlapping Pattern
 
         canvas.drawBitmap(mutableBitmap, 0.0f, 0.0f, textPaint)
@@ -167,44 +181,48 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
             yScale = overlay!!.scaleY
         }
 
-        while(boxit.hasNext()) {
-            val boxInfo = boxit.next()
-
-            // out => x0,y0,x1,y1,score,cls_id
-            val x = boxInfo[0]
-            val y = boxInfo[1]
-            val w = boxInfo[2]
-            val h = boxInfo[3]
-            val score = boxInfo[4]
-            val classId = boxInfo[5]
-
-            val left = ((x - w/2))
-            val top = ((y - h/2))
-            val width = ((left+w) * xScale)
-            val height = ((top+h) * yScale)
-
-            canvas.drawText("%s:%.2f".format(classes[classId.toInt()], score),
-                x-w/2+8, y-h/2+32, textPaint)
-
-            val boxPaint = Paint()
-            val pixel = result.outputBitmap.getPixel((width / 2).roundToInt(),
-                (height / 2).roundToInt()
-            ) * classId.toInt() / 255
-
-            // border
-            boxPaint.strokeWidth = 3f
-            boxPaint.style = Paint.Style.STROKE
-            boxPaint.setARGB(255, 255, pixel, 255 - pixel)
-            canvas.drawRect(left, top, (width), (height), boxPaint)
-        }
-
-        mutableBitmap = BitmapUtils.getResizedBitmap(
-            mutableBitmap,
-            mutableBitmap.width * RESIZING_BITMAP_COMPUTATION,
-            mutableBitmap.height * RESIZING_BITMAP_COMPUTATION)
-
         if (mutableBitmap != null) {
-            listener(mutableBitmap)
+
+            val bboxes: MutableList<BoundingBox> = emptyArray<BoundingBox>().toMutableList()
+
+            while(boxit.hasNext()) {
+
+                // out => x0,y0,x1,y1,score,cls_id
+                val boxInfo = boxit.next()
+
+                val bbox = BoundingBox()
+                bbox.x = boxInfo[0] * RESIZING_BITMAP_COMPUTATION
+                bbox.y = boxInfo[1] * RESIZING_BITMAP_COMPUTATION
+                bbox.w = boxInfo[2] * RESIZING_BITMAP_COMPUTATION
+                bbox.h = boxInfo[3] * RESIZING_BITMAP_COMPUTATION
+                bbox.score = boxInfo[4]
+                bbox.classId = boxInfo[5]
+                bbox.left = ((bbox.x - bbox.w/2))
+                bbox.top = ((bbox.y - bbox.h/2))
+                bbox.width = ((bbox.left+bbox.w) * xScale)
+                bbox.height = ((bbox.top+bbox.h) * yScale)
+                bboxes.add(bbox)
+
+                textPaint.color = Color.RED;
+                canvas.drawRect(
+                    bbox.left,
+                    bbox.top,
+                    bbox.left+((classes[bbox.classId.toInt()].length+4)*24f),
+                    bbox.top+48,
+                    textPaint)
+                textPaint.color = Color.WHITE // Text Color
+                canvas.drawText("%s:%.2f".format(classes[bbox.classId.toInt()], bbox.score),
+                    bbox.left+8, bbox.top+36, textPaint)
+
+                // border
+                val boxPaint = Paint()
+                boxPaint.strokeWidth = 3f
+                boxPaint.style = Paint.Style.STROKE
+                boxPaint.setARGB(255, 255, 0, 0)
+                canvas.drawRect(bbox.left, bbox.top, bbox.width, bbox.height, boxPaint)
+            }
+
+            listener(mutableBitmap, bboxes.toTypedArray())
         }
     }
 

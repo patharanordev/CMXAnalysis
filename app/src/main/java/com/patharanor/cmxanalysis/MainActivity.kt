@@ -12,13 +12,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import com.patharanor.cmxanalysis.analyzer.BoundingBox
 import com.patharanor.cmxanalysis.analyzer.LuminosityAnalyzer
 import com.patharanor.cmxanalysis.analyzer.ObjectDetector
 import com.patharanor.cmxanalysis.analyzer.SegmentAnyting
 import com.patharanor.cmxanalysis.databinding.ActivityMainBinding
+import com.patharanor.cmxanalysis.utils.CameraCapture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -28,7 +31,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewBinding : ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var outputImage: ImageView
-    private var CURRENT_ANALYZER = "OBJECT_DETECTION" // "SEGMENT_ANYTHING"
+    private var imageCapture: ImageCapture? = null
+    private var cameraCapture: CameraCapture? = null
+    private var CURRENT_ANALYZER = "OBJECT_DETECTION" // "SEGMENT_ANYTHING" //
+    private var bboxes: Array<BoundingBox> = emptyArray()
     private var activityResultLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions())
@@ -59,10 +65,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (allPermissionsGranted()) {
+            cameraCapture = CameraCapture(baseContext)
             startCamera()
         } else {
             requestPermissions()
         }
+
+        // Set up the listeners for take photo buttons
+        viewBinding.imageCaptureButton.setOnClickListener { cameraCapture?.takePhoto(this.bboxes) }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
@@ -110,7 +120,8 @@ class MainActivity : AppCompatActivity() {
                             val modelID = R.raw.yolov8n_with_pre_post_processing
                             val classes: List<String> = readClasses();
                             val modelByte: ByteArray = readModel(modelID);
-                            val objectDetector = ObjectDetector{ bitmap ->
+                            val objectDetector = ObjectDetector{ bitmap, bboxes ->
+                                this.bboxes = bboxes
                                 Log.d(TAG, "Object detection : $bitmap")
 
                                 try {
@@ -136,10 +147,12 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+            imageCapture = cameraCapture?.build()
+
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageAnalyzer
+                    this, cameraSelector, preview, imageCapture, imageAnalyzer
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Use case binding failed", e)
