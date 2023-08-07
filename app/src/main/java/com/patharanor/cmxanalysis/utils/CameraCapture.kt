@@ -106,13 +106,12 @@ class CameraCapture(baseContext: Context) {
             Log.d(TAG, "real-bitmap width: ${bitmap.width}")
             Log.d(TAG, "real-bitmap height: ${bitmap.height}")
 
-            val mutableBitmap = Bitmap.createBitmap(
-                bitmap,
-                if (it.left < 0) 0 else it.left.roundToInt(),
-                if (it.left < 0) 0 else it.top.roundToInt(),
-                it.width.roundToInt() - it.left.roundToInt(),
-                it.height.roundToInt() - it.top.roundToInt(),
-            )
+            val x = if (it.left < 0) 0 else it.left.roundToInt()
+            val y = if (it.top < 0) 0 else it.top.roundToInt()
+            val width = (if (it.width > bitmap.width) bitmap.width else it.width.roundToInt()) - x
+            val height = (if (it.height > bitmap.height) bitmap.height else it.height.roundToInt()) - y
+
+            val mutableBitmap = Bitmap.createBitmap(bitmap, x, y, width, height)
             saveImage(this.context, mutableBitmap, it.label)
         }
     }

@@ -142,6 +142,7 @@ class ObjectDetector(private val listener: ObjectDetectionListener) : ImageAnaly
             if (overlay.width > DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE || overlay.height > DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE) {
                 val maxResolution = Math.max(overlay.width, overlay.height)
                 RESIZING_BITMAP_COMPUTATION = maxResolution/DEFAUL_MAX_RESOLUTION_TRAIN_IMAGE
+                //RESIZING_BITMAP_COMPUTATION = 1
                 Log.d(TAG, "Auto-scale image IO with ratio $RESIZING_BITMAP_COMPUTATION")
             }
         }

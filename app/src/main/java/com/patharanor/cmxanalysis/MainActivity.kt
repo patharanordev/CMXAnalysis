@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
 import android.os.Bundle
+import android.util.DisplayMetrics
 import android.util.Log
 import android.util.Size
 import android.widget.ImageView
@@ -23,6 +24,7 @@ import com.patharanor.cmxanalysis.analyzer.LuminosityAnalyzer
 import com.patharanor.cmxanalysis.analyzer.ObjectDetector
 import com.patharanor.cmxanalysis.analyzer.SegmentAnyting
 import com.patharanor.cmxanalysis.databinding.ActivityMainBinding
+import com.patharanor.cmxanalysis.utils.BitmapUtils
 import com.patharanor.cmxanalysis.utils.CameraCapture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -37,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private var cameraCapture: CameraCapture? = null
     private var CURRENT_ANALYZER = "OBJECT_DETECTION" // "SEGMENT_ANYTHING" //
     private var bboxes: Array<BoundingBox> = emptyArray()
+    private var resultBitmap: Bitmap? = null
     private var activityResultLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions())
@@ -75,8 +78,16 @@ class MainActivity : AppCompatActivity() {
 
         // Set up the listeners for take photo buttons
         viewBinding.imageCaptureButton.setOnClickListener {
-            viewBinding.viewFinder.bitmap?.let { it1 ->
-                cameraCapture?.recordTargetObject(it1, this.bboxes)
+            resultBitmap?.let {
+                if (it != null) {
+                    Log.d(TAG, "Pixel outputImage width: ${it.width}")
+                    Log.d(TAG, "Pixel outputImage height: ${it.height}")
+                    viewBinding.viewFinder.bitmap?.let { it1 ->
+                        BitmapUtils.getResizedBitmap(it1, it.width, it.height)?.let { it2 ->
+                            cameraCapture?.recordTargetObject(it2, this.bboxes)
+                        }
+                    }
+                }
             }
         }
 
@@ -128,6 +139,7 @@ class MainActivity : AppCompatActivity() {
                             val modelByte: ByteArray = readModel(modelID);
                             val objectDetector = ObjectDetector{ bitmap, bboxes ->
                                 this.bboxes = bboxes
+                                this.resultBitmap = bitmap
                                 Log.d(TAG, "Object detection : $bitmap")
 
                                 try {
