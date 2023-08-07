@@ -44,16 +44,7 @@ class CameraCapture(baseContext: Context) {
         return imageCapture
     }
 
-    fun takePhoto(bboxes: Array<BoundingBox>) {
-
-//        bboxes.map {
-//            Log.d(TAG, "-----------------------------")
-//            Log.d(TAG, "left: ${it.left}")
-//            Log.d(TAG, "top: ${it.top}")
-//            Log.d(TAG, "width: ${it.width}")
-//            Log.d(TAG, "height: ${it.height}")
-//        }
-
+    fun takePhoto() {
         // Get a stable reference of the modifiable image capture use case
         val imageCapture = imageCapture ?: return
 

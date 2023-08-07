@@ -3,10 +3,8 @@ package com.patharanor.cmxanalysis
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.os.Build
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.util.Log
 import android.util.Size
 import android.widget.ImageView
@@ -24,7 +22,6 @@ import com.patharanor.cmxanalysis.analyzer.LuminosityAnalyzer
 import com.patharanor.cmxanalysis.analyzer.ObjectDetector
 import com.patharanor.cmxanalysis.analyzer.SegmentAnyting
 import com.patharanor.cmxanalysis.databinding.ActivityMainBinding
-import com.patharanor.cmxanalysis.utils.BitmapUtils
 import com.patharanor.cmxanalysis.utils.CameraCapture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -80,10 +77,8 @@ class MainActivity : AppCompatActivity() {
         viewBinding.imageCaptureButton.setOnClickListener {
             resultBitmap?.let {
                 if (it != null) {
-                    Log.d(TAG, "Pixel outputImage width: ${it.width}")
-                    Log.d(TAG, "Pixel outputImage height: ${it.height}")
                     viewBinding.viewFinder.bitmap?.let { it1 ->
-                        BitmapUtils.getResizedBitmap(it1, it.width, it.height)?.let { it2 ->
+                        Bitmap.createScaledBitmap(it1, it.width, it.height, true)?.let { it2 ->
                             cameraCapture?.recordTargetObject(it2, this.bboxes)
                         }
                     }
@@ -97,17 +92,21 @@ class MainActivity : AppCompatActivity() {
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
+
+            // Camera provider
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
+            // Preview view
             val preview = Preview.Builder()
                 .build()
                 .also {
                     it.setSurfaceProvider(viewBinding.viewFinder.surfaceProvider)
                 }
 
+            // Camera selector
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
-
+            // Image analyzer
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setTargetResolution(Size(viewBinding.viewFinder.width, viewBinding.viewFinder.height))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -205,7 +204,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "CMXAnalysis"
-        // private const val FILENAME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS"
         private val REQUIRED_PERMISSIONS =
             mutableListOf(
                 Manifest.permission.CAMERA,
